@@ -94,8 +94,8 @@ class GradioMultiTalkPipeline:
             logger.error(traceback.format_exc())
             raise
     
-    def _prepare_audio_embeddings(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Prepare audio embeddings from audio files"""
+    def _prepare_audio_embeddings(self, input_data: Dict[str, Any]) -> tuple[Dict[str, Any], int]:
+        """Prepare audio embeddings from audio files and calculate frame count"""
         try:
             # Create audio save directory
             audio_save_dir = os.path.join(
@@ -105,6 +105,7 @@ class GradioMultiTalkPipeline:
             os.makedirs(audio_save_dir, exist_ok=True)
             
             cond_audio = input_data['cond_audio']
+            audio_duration = 0
             
             if len(cond_audio) == 2:
                 # Multi-person audio
@@ -115,6 +116,9 @@ class GradioMultiTalkPipeline:
                     cond_audio['person2'], 
                     audio_type
                 )
+                
+                # Calculate audio duration from the combined audio
+                audio_duration = len(sum_human_speechs) / 16000  # 16kHz sample rate
                 
                 # Generate embeddings
                 audio_embedding_1 = get_embedding(
@@ -149,6 +153,10 @@ class GradioMultiTalkPipeline:
             elif len(cond_audio) == 1:
                 # Single person audio
                 human_speech = audio_prepare_single(cond_audio['person1'])
+                
+                # Calculate audio duration
+                audio_duration = len(human_speech) / 16000  # 16kHz sample rate
+                
                 audio_embedding = get_embedding(
                     human_speech, 
                     self.wav2vec_feature_extractor, 
@@ -169,7 +177,16 @@ class GradioMultiTalkPipeline:
                 input_data['cond_audio']['person1'] = emb_path
                 input_data['video_audio'] = sum_audio_path
             
-            return input_data
+            # Calculate frame count based on audio duration (25 FPS)
+            calculated_frame_num = int(audio_duration * 25)
+            
+            # Ensure minimum frame count and reasonable maximum
+            calculated_frame_num = max(25, calculated_frame_num)  # At least 1 second
+            calculated_frame_num = min(calculated_frame_num, 1000)  # Max ~40 seconds
+            
+            logger.info(f"Audio duration: {audio_duration:.2f}s, Calculated frames: {calculated_frame_num}")
+            
+            return input_data, calculated_frame_num
             
         except Exception as e:
             logger.error(f"Audio embedding preparation failed: {e}")
@@ -235,31 +252,35 @@ class GradioMultiTalkPipeline:
                 if progress_callback:
                     progress_callback(0.2)
                 
-                # Prepare audio embeddings
+                # Prepare audio embeddings and calculate frame count
                 logger.info("Preparing audio embeddings...")
                 queue_manager.update_job_progress(job_id, 0.2, "Processing audio embeddings...")
-                processed_input_data = self._prepare_audio_embeddings(input_data.copy())
+                processed_input_data, calculated_frame_num = self._prepare_audio_embeddings(input_data.copy())
+                
+                # Use calculated frame number instead of the UI parameter
+                actual_frame_num = calculated_frame_num
+                logger.info(f"Using calculated frame count: {actual_frame_num} (ignoring UI setting: {frame_num})")
                 
                 if progress_callback:
                     progress_callback(0.3)
                 
                 # Generate video with progress tracking
                 logger.info("Generating video...")
-                queue_manager.update_job_progress(job_id, 0.3, "Generating video frames...")
+                queue_manager.update_job_progress(job_id, 0.3, f"Generating {actual_frame_num} video frames...")
                 
                 # Enable progress tracking in the pipeline
                 video_tensor = self.pipeline.generate(
                     processed_input_data,
                     size_buckget='multitalk-480',
                     motion_frame=25,
-                    frame_num=frame_num,
+                    frame_num=actual_frame_num,
                     shift=7.0,
                     sampling_steps=sampling_steps,
                     text_guide_scale=text_guide_scale,
                     audio_guide_scale=audio_guide_scale,
                     seed=seed,
                     offload_model=True,
-                    max_frames_num=frame_num,
+                    max_frames_num=actual_frame_num,
                     progress=True  # Enable progress tracking
                 )
                 

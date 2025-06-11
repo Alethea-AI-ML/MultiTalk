@@ -227,13 +227,14 @@ def create_enhanced_status_components():
     )
     
     # Live logs component
-    logs_textbox = gr.Code(
+    logs_textbox = gr.Textbox(
         value=get_live_logs(),
         label="Live Processing Logs",
-        language="text",
         lines=15,
         elem_id="live_logs",
-        interactive=False
+        interactive=False,
+        max_lines=15,
+        show_copy_button=True
     )
     
     # Auto-refresh components

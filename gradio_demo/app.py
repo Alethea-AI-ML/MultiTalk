@@ -299,10 +299,10 @@ class MultiTalkGradioApp:
                             )
                             
                             with gr.Accordion("⚙️ Advanced Settings", open=False):
+                                gr.Markdown("**Note:** Video length is automatically calculated from audio duration (25 FPS)")
                                 single_steps = gr.Slider(10, 50, value=40, step=1, label="Sampling Steps")
                                 single_text_scale = gr.Slider(1.0, 10.0, value=5.0, step=0.5, label="Text Guidance Scale")
                                 single_audio_scale = gr.Slider(1.0, 10.0, value=4.0, step=0.5, label="Audio Guidance Scale")
-                                single_frames = gr.Slider(81, 201, value=81, step=20, label="Frame Number")
                                 single_seed = gr.Number(value=42, label="Seed (-1 for random)")
                             
                             single_generate_btn = gr.Button("🎬 Generate Video", variant="primary", size="lg")
@@ -366,10 +366,10 @@ class MultiTalkGradioApp:
                                 )
                             
                             with gr.Accordion("⚙️ Advanced Settings", open=False):
+                                gr.Markdown("**Note:** Video length is automatically calculated from audio duration (25 FPS)")
                                 multi_steps = gr.Slider(10, 50, value=40, step=1, label="Sampling Steps")
                                 multi_text_scale = gr.Slider(1.0, 10.0, value=5.0, step=0.5, label="Text Guidance Scale")
                                 multi_audio_scale = gr.Slider(1.0, 10.0, value=4.0, step=0.5, label="Audio Guidance Scale")
-                                multi_frames = gr.Slider(81, 201, value=81, step=20, label="Frame Number")
                                 multi_seed = gr.Number(value=42, label="Seed (-1 for random)")
                             
                             multi_generate_btn = gr.Button("🎬 Generate Video", variant="primary", size="lg")
@@ -439,7 +439,7 @@ class MultiTalkGradioApp:
                 inputs=[
                     single_image, single_audio, single_prompt,
                     single_steps, single_text_scale, single_audio_scale,
-                    single_frames, single_seed
+                    81, single_seed  # Use dummy frame number (will be overridden)
                 ],
                 outputs=[single_output_video, single_status],
                 show_progress=True
@@ -451,7 +451,7 @@ class MultiTalkGradioApp:
                     multi_image, multi_audio1, multi_audio2, multi_audio_type,
                     multi_prompt, multi_bbox1, multi_bbox2,
                     multi_steps, multi_text_scale, multi_audio_scale,
-                    multi_frames, multi_seed
+                    81, multi_seed  # Use dummy frame number (will be overridden)
                 ],
                 outputs=[multi_output_video, multi_status],
                 show_progress=True
