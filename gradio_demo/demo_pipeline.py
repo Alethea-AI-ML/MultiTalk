@@ -184,6 +184,34 @@ class GradioMultiTalkPipeline:
             calculated_frame_num = max(25, calculated_frame_num)  # At least 1 second
             calculated_frame_num = min(calculated_frame_num, 1000)  # Max ~40 seconds
             
+            # Ensure frame_num follows the 4n+1 rule required by MultiTalk
+            if (calculated_frame_num - 1) % 4 != 0:
+                calculated_frame_num = ((calculated_frame_num - 1) // 4 + 1) * 4 + 1
+            
+            # Check if audio embeddings are long enough
+            # MultiTalk requires audio embedding length > frame_num
+            min_required_length = calculated_frame_num + 10  # Add buffer
+            
+            if len(cond_audio) == 2:
+                # Multi-person: check both embeddings
+                if audio_embedding_1.shape[0] <= calculated_frame_num or audio_embedding_2.shape[0] <= calculated_frame_num:
+                    # Reduce frame count to fit audio
+                    min_audio_length = min(audio_embedding_1.shape[0], audio_embedding_2.shape[0])
+                    calculated_frame_num = min(calculated_frame_num, min_audio_length - 5)
+                    # Ensure 4n+1 rule
+                    if (calculated_frame_num - 1) % 4 != 0:
+                        calculated_frame_num = ((calculated_frame_num - 1) // 4) * 4 + 1
+                    calculated_frame_num = max(25, calculated_frame_num)  # Minimum 25 frames
+            else:
+                # Single person: check one embedding
+                if audio_embedding.shape[0] <= calculated_frame_num:
+                    # Reduce frame count to fit audio
+                    calculated_frame_num = min(calculated_frame_num, audio_embedding.shape[0] - 5)
+                    # Ensure 4n+1 rule
+                    if (calculated_frame_num - 1) % 4 != 0:
+                        calculated_frame_num = ((calculated_frame_num - 1) // 4) * 4 + 1
+                    calculated_frame_num = max(25, calculated_frame_num)  # Minimum 25 frames
+            
             logger.info(f"Audio duration: {audio_duration:.2f}s, Calculated frames: {calculated_frame_num}")
             
             return input_data, calculated_frame_num
