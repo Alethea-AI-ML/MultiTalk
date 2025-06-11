@@ -19,6 +19,8 @@ from transformers import Wav2Vec2FeatureExtractor
 from src.audio_analysis.wav2vec2 import Wav2Vec2Model
 from wan.utils.multitalk_utils import save_video_ffmpeg
 from utils import audio_prepare_single, audio_prepare_multi, get_embedding
+from progress_capture import progress_tracker
+from queue_manager import queue_manager
 
 logger = logging.getLogger(__name__)
 
@@ -183,10 +185,11 @@ class GradioMultiTalkPipeline:
         frame_num: int = 81,
         seed: int = 42,
         mode: str = "single",
-        progress_callback: Optional[Callable[[float], None]] = None
+        progress_callback: Optional[Callable[[float], None]] = None,
+        job_id: Optional[str] = None
     ) -> Optional[str]:
         """
-        Generate video using MultiTalk pipeline
+        Generate video using MultiTalk pipeline with enhanced progress tracking
         
         Args:
             input_data: Input configuration dictionary
@@ -197,89 +200,111 @@ class GradioMultiTalkPipeline:
             seed: Random seed
             mode: Generation mode ("single" or "multi")
             progress_callback: Progress callback function
+            job_id: Job ID for queue tracking
             
         Returns:
             Path to generated video file
         """
+        # Create job ID if not provided
+        if job_id is None:
+            job_id = queue_manager.add_job(mode)
+        
+        # Start job tracking
+        queue_manager.start_job(job_id)
+        
         try:
-            if progress_callback:
-                progress_callback(0.1)
-            
-            # Set random seed
-            if seed < 0:
-                seed = random.randint(0, 99999999)
-            
-            torch.manual_seed(seed)
-            torch.cuda.manual_seed_all(seed)
-            np.random.seed(seed)
-            random.seed(seed)
-            torch.backends.cudnn.deterministic = True
-            
-            logger.info(f"Starting video generation with seed: {seed}")
-            
-            if progress_callback:
-                progress_callback(0.2)
-            
-            # Prepare audio embeddings
-            logger.info("Preparing audio embeddings...")
-            processed_input_data = self._prepare_audio_embeddings(input_data.copy())
-            
-            if progress_callback:
-                progress_callback(0.3)
-            
-            # Generate video
-            logger.info("Generating video...")
-            video_tensor = self.pipeline.generate(
-                processed_input_data,
-                size_buckget='multitalk-480',
-                motion_frame=25,
-                frame_num=frame_num,
-                shift=7.0,
-                sampling_steps=sampling_steps,
-                text_guide_scale=text_guide_scale,
-                audio_guide_scale=audio_guide_scale,
-                seed=seed,
-                offload_model=True,
-                max_frames_num=frame_num,
-                progress=False  # We handle progress externally
-            )
-            
-            if progress_callback:
-                progress_callback(0.8)
-            
-            if video_tensor is None:
-                raise RuntimeError("Video generation returned None")
-            
-            # Save video
-            logger.info("Saving video...")
-            output_filename = f"multitalk_output_{random.randint(1000, 9999)}"
-            output_path = os.path.join(self.temp_dir, f"{output_filename}.mp4")
-            
-            # Use the video audio if available
-            audio_files = []
-            if 'video_audio' in processed_input_data:
-                audio_files = [processed_input_data['video_audio']]
-            
-            save_video_ffmpeg(video_tensor, output_filename, audio_files)
-            
-            # Move to temp directory if not already there
-            generated_file = f"{output_filename}.mp4"
-            if os.path.exists(generated_file) and not os.path.exists(output_path):
-                import shutil
-                shutil.move(generated_file, output_path)
-            
-            if progress_callback:
-                progress_callback(1.0)
-            
-            if os.path.exists(output_path):
-                logger.info(f"Video generated successfully: {output_path}")
-                return output_path
-            else:
-                raise RuntimeError(f"Generated video file not found: {output_path}")
+            # Start progress capture
+            with progress_tracker.start_job_tracking(job_id) as progress_capture:
                 
+                if progress_callback:
+                    progress_callback(0.1)
+                
+                # Set random seed
+                if seed < 0:
+                    seed = random.randint(0, 99999999)
+                
+                torch.manual_seed(seed)
+                torch.cuda.manual_seed_all(seed)
+                np.random.seed(seed)
+                random.seed(seed)
+                torch.backends.cudnn.deterministic = True
+                
+                logger.info(f"Starting video generation with seed: {seed}")
+                queue_manager.update_job_progress(job_id, 0.1, "Initializing generation...")
+                
+                if progress_callback:
+                    progress_callback(0.2)
+                
+                # Prepare audio embeddings
+                logger.info("Preparing audio embeddings...")
+                queue_manager.update_job_progress(job_id, 0.2, "Processing audio embeddings...")
+                processed_input_data = self._prepare_audio_embeddings(input_data.copy())
+                
+                if progress_callback:
+                    progress_callback(0.3)
+                
+                # Generate video with progress tracking
+                logger.info("Generating video...")
+                queue_manager.update_job_progress(job_id, 0.3, "Generating video frames...")
+                
+                # Enable progress tracking in the pipeline
+                video_tensor = self.pipeline.generate(
+                    processed_input_data,
+                    size_buckget='multitalk-480',
+                    motion_frame=25,
+                    frame_num=frame_num,
+                    shift=7.0,
+                    sampling_steps=sampling_steps,
+                    text_guide_scale=text_guide_scale,
+                    audio_guide_scale=audio_guide_scale,
+                    seed=seed,
+                    offload_model=True,
+                    max_frames_num=frame_num,
+                    progress=True  # Enable progress tracking
+                )
+                
+                if progress_callback:
+                    progress_callback(0.8)
+                
+                if video_tensor is None:
+                    raise RuntimeError("Video generation returned None")
+                
+                # Save video
+                logger.info("Saving video...")
+                queue_manager.update_job_progress(job_id, 0.8, "Saving video file...")
+                output_filename = f"multitalk_output_{random.randint(1000, 9999)}"
+                output_path = os.path.join(self.temp_dir, f"{output_filename}.mp4")
+                
+                # Use the video audio if available
+                audio_files = []
+                if 'video_audio' in processed_input_data:
+                    audio_files = [processed_input_data['video_audio']]
+                
+                save_video_ffmpeg(video_tensor, output_filename, audio_files)
+                
+                # Move to temp directory if not already there
+                generated_file = f"{output_filename}.mp4"
+                if os.path.exists(generated_file) and not os.path.exists(output_path):
+                    import shutil
+                    shutil.move(generated_file, output_path)
+                
+                if progress_callback:
+                    progress_callback(1.0)
+                
+                queue_manager.update_job_progress(job_id, 1.0, "Video generation complete!")
+                
+                if os.path.exists(output_path):
+                    logger.info(f"Video generated successfully: {output_path}")
+                    queue_manager.complete_job(job_id, success=True)
+                    return output_path
+                else:
+                    raise RuntimeError(f"Generated video file not found: {output_path}")
+                    
         except Exception as e:
-            logger.error(f"Video generation failed: {e}")
+            error_msg = f"Video generation failed: {e}"
+            logger.error(error_msg)
             logger.error(traceback.format_exc())
+            queue_manager.complete_job(job_id, success=False, error_message=str(e))
             raise
     
     def cleanup(self):

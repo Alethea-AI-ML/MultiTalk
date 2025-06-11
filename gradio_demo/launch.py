@@ -149,11 +149,7 @@ def main():
             demo.launch(
                 server_name=args.host,
                 server_port=args.port,
-                share=args.share,
-                show_error=True,
-                show_tips=True,
-                enable_queue=True,
-                max_threads=4
+                share=args.share
             )
             return demo
         

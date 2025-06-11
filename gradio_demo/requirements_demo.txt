@@ -1,7 +1,7 @@
 # Additional requirements for the Gradio demo
 # Install these in addition to the main requirements.txt
 
-gradio>=4.0.0
+gradio>=5.0.0
 soundfile>=0.12.1
 Pillow>=9.0.0
 
@@ -17,3 +17,6 @@ pyloudnorm>=0.1.1
 # For video processing
 imageio>=2.25.0
 imageio-ffmpeg>=0.4.8
+
+# For system monitoring
+psutil>=5.9.0

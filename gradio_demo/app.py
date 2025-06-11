@@ -13,6 +13,8 @@ from demo_pipeline import GradioMultiTalkPipeline
 from input_processor import InputProcessor
 from utils import setup_logging, get_example_data, format_error_message
 from config import DemoConfig
+from ui_components import create_enhanced_status_components, create_system_info_component
+from queue_manager import queue_manager
 
 # Setup logging
 setup_logging()
@@ -216,7 +218,7 @@ class MultiTalkGradioApp:
         # Custom CSS for better styling
         css = """
         .gradio-container {
-            max-width: 1200px !important;
+            max-width: 1400px !important;
         }
         .output-video {
             max-height: 500px;
@@ -228,6 +230,27 @@ class MultiTalkGradioApp:
         .success-message {
             color: #44ff44;
             font-weight: bold;
+        }
+        #queue_status {
+            margin-bottom: 10px;
+        }
+        #progress_monitor {
+            margin-bottom: 10px;
+        }
+        #live_logs {
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            background: #1f2937;
+            color: #f9fafb;
+        }
+        #system_info {
+            margin-top: 10px;
+        }
+        .status-panel {
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 15px;
         }
         """
         
@@ -243,6 +266,15 @@ class MultiTalkGradioApp:
             - 👥 Interactive character control via prompts
             - 📺 480p & 720p output support
             """)
+            
+            # Enhanced Status Dashboard
+            with gr.Row():
+                with gr.Column(scale=2):
+                    # Create enhanced status components
+                    queue_status_html, progress_html, logs_textbox, refresh_timer = create_enhanced_status_components()
+                with gr.Column(scale=1):
+                    # System info
+                    system_info = create_system_info_component()
             
             with gr.Tabs():
                 # Single Person Tab
@@ -354,6 +386,26 @@ class MultiTalkGradioApp:
                                 max_lines=3
                             )
                 
+                # Monitoring Dashboard Tab
+                with gr.TabItem("📊 Monitor"):
+                    gr.Markdown("""
+                    ### Live Processing Monitor
+                    
+                    Real-time view of queue status, progress, and system logs.
+                    """)
+                    
+                    with gr.Row():
+                        with gr.Column(scale=1):
+                            # Detailed queue status
+                            queue_status_detailed = queue_status_html
+                            
+                            # Detailed progress monitor
+                            progress_detailed = progress_html
+                        
+                        with gr.Column(scale=1):
+                            # Live logs with more space
+                            logs_detailed = logs_textbox
+                
                 # Examples Tab
                 with gr.TabItem("📚 Examples"):
                     gr.Markdown("""
@@ -431,11 +483,7 @@ def main():
         demo.launch(
             server_name="0.0.0.0",
             server_port=7860,
-            share=False,
-            show_error=True,
-            show_tips=True,
-            enable_queue=True,
-            max_threads=4
+            share=False
         )
     
     except KeyboardInterrupt:
