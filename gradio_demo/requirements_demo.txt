@@ -1,0 +1,19 @@
+# Additional requirements for the Gradio demo
+# Install these in addition to the main requirements.txt
+
+gradio>=4.0.0
+soundfile>=0.12.1
+Pillow>=9.0.0
+
+# Optional but recommended for better performance
+uvicorn>=0.20.0
+python-multipart>=0.0.5
+aiofiles>=22.1.0
+
+# For audio processing (if not already installed)
+librosa>=0.9.0
+pyloudnorm>=0.1.1
+
+# For video processing
+imageio>=2.25.0
+imageio-ffmpeg>=0.4.8
